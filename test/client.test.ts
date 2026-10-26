@@ -64,8 +64,8 @@ describe("check(): success path", () => {
     expect(request.url).toBe("https://precleared.dev/api/v1/check");
     expect(mock.header("content-type")).toBe("application/json");
     expect(mock.header("accept")).toBe("application/json");
-    expect(mock.header("user-agent")).toBe("precleared-js/0.1.1");
-    expect(DEFAULT_USER_AGENT).toBe("precleared-js/0.1.1");
+    expect(mock.header("user-agent")).toBe("precleared-js/0.1.2");
+    expect(DEFAULT_USER_AGENT).toBe("precleared-js/0.1.2");
     expect(mock.header("authorization")).toBeUndefined();
 
     expect(mock.lastJson()).toEqual({
