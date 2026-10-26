@@ -2,6 +2,10 @@
 
 All notable changes to this package are recorded here. The format follows Keep a Changelog, and the package follows semantic versioning.
 
+## 0.1.2 (27 October 2026)
+
+- README only: the allowances section now describes a new key's 14 days at 100 checks a day, the £15 monthly plan that keeps 100 a day, and the £9 starter pack alongside the £39 pack. No code changes.
+
 ## 0.1.1 (20 October 2026)
 
 - Fixed: `PreclearedAiSdkTools` and `PreclearedMastraTools` are now type aliases instead of interfaces, so `tools: await preclearedTools(client)` type-checks against `ToolSet` in `ai` 7 (and against index-signature tool records in Mastra) without a cast or a spread. No runtime change.
