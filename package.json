@@ -1,6 +1,6 @@
 {
   "name": "precleared",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cold-email legality check for AI agents: a TypeScript client for the Precleared API, with Vercel AI SDK, Mastra and LangChain tools.",
   "keywords": [
     "cold email",
