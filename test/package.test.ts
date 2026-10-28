@@ -30,7 +30,7 @@ function read(file: string): string {
 describe("package shape", () => {
   it("is named precleared at the version the code reports", () => {
     expect(pkg.name).toBe("precleared");
-    expect(pkg.version).toBe("0.1.2");
+    expect(pkg.version).toBe("0.2.0");
     expect(root.VERSION).toBe(pkg.version);
     expect(root.DEFAULT_USER_AGENT).toBe(`precleared-js/${pkg.version}`);
     expect(pkg.engines.node).toBe(">=18");

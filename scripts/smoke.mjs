@@ -3,8 +3,12 @@
 // Nothing leaves the machine. Run after `npm run build`: `npm run smoke`.
 
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -53,6 +57,26 @@ const server = createServer((req, res) => {
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+// A second server for the command: answers by the recipient's local part.
+const CONSENT = { ...OK, verdict: "consent_needed", rules_applied: ["gb_individual_consent"], footer_text: null, next_step: "Do not cold email." };
+const cliSeen = [];
+const cliServer = createServer((req, res) => {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", () => {
+    cliSeen.push({ url: req.url, headers: req.headers, body });
+    const email = JSON.parse(body || "{}").recipient_email ?? "";
+    if (email.startsWith("fail@")) {
+      res.writeHead(500, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ error: "server_error", message: "fails on purpose" }));
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(email.startsWith("consent@") ? CONSENT : OK));
+  });
+});
+await new Promise((resolve) => cliServer.listen(0, "127.0.0.1", resolve));
+const cliBaseUrl = `http://127.0.0.1:${cliServer.address().port}`;
 
 try {
   for (const [label, mod] of [
@@ -124,8 +148,44 @@ try {
   assert.equal(typeof preclearedTools, "function");
   assert.equal(esm.PreclearedError, (await import("../dist/index.js")).PreclearedError);
 
+  // The command: dist/cli.js copied out of the project, so it can only work
+  // if zod really is bundled into it, run by Node against a local server.
+  const cliDir = mkdtempSync(join(tmpdir(), "precleared-smoke-"));
+  copyFileSync(new URL("../dist/cli.js", import.meta.url), join(cliDir, "cli.mjs"));
+  assert.match(readFileSync(join(cliDir, "cli.mjs"), "utf8"), /^#!\/usr\/bin\/env node\n/, "cli: shebang");
+  const runCli = (args, input = "") =>
+    new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [join(cliDir, "cli.mjs"), ...args], {
+        cwd: cliDir,
+        env: { ...process.env, HOME: cliDir, USERPROFILE: cliDir, PRECLEARED_API_KEY: "", PRECLEARED_KEY_FILE: "" },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk));
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout, stderr }));
+      child.stdin.end(input);
+    });
+  const hook = ["check", "--stdin", "--no-cache", "--base-url", cliBaseUrl, "--timeout", "5"];
+  let run = await runCli(["--version"]);
+  assert.equal(run.stdout.trim(), esm.VERSION, "cli: version");
+  run = await runCli(hook, "ok@acme.co.uk\n+447700900123\n");
+  assert.equal(run.code, 0, `cli: send exits 0 (${run.stderr})`);
+  assert.match(run.stdout, /^send {3}ok@acme\.co\.uk {2}ok_to_email/, "cli: send line");
+  run = await runCli(hook, "ok@acme.co.uk\nconsent@acme.co.uk\n");
+  assert.equal(run.code, 2, "cli: a hold exits 2");
+  run = await runCli(hook, "fail@acme.co.uk\n");
+  assert.equal(run.code, 1, "cli: an error exits 1");
+  run = await runCli(["check"]);
+  assert.equal(run.code, 1, "cli: no addresses exits 1");
+  assert.equal(cliSeen.at(-1)?.headers["user-agent"], `precleared-cli/${esm.VERSION} (+https://www.npmjs.com/package/precleared)`, "cli: user agent");
+  console.log("cli: runs on its own, exit codes 0, 2 and 1");
+
   console.log("smoke: all good");
 } finally {
   server.closeAllConnections?.();
   server.close();
+  cliServer.closeAllConnections?.();
+  cliServer.close();
 }

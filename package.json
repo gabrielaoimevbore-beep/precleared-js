@@ -1,7 +1,7 @@
 {
   "name": "precleared",
-  "version": "0.1.2",
-  "description": "Cold-email legality check for AI agents: a TypeScript client for the Precleared API, with Vercel AI SDK, Mastra and LangChain tools.",
+  "version": "0.2.0",
+  "description": "Cold-email legality check for AI agents: a TypeScript client for the Precleared API, with Vercel AI SDK, Mastra and LangChain tools, and a precleared command for scripts and pre-send hooks.",
   "keywords": [
     "cold email",
     "email compliance",
@@ -13,7 +13,9 @@
     "ai-sdk",
     "mastra",
     "langchain",
-    "typescript"
+    "typescript",
+    "cli",
+    "pre-send check"
   ],
   "homepage": "https://precleared.dev",
   "bugs": {
@@ -31,6 +33,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "precleared": "dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -111,7 +116,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsup --config tsup.cli.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:zod3": "vitest run --config vitest.zod3.config.ts",

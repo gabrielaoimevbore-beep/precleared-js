@@ -16,6 +16,8 @@ npm install precleared zod
 
 Node 18 or later. The package ships ESM and CommonJS builds with type definitions. `zod` is a peer dependency: 3.25 or later, or 4. The package imports `zod/v4`, which both ship, so the schemas and their types are the same under either major. The framework packages below are optional peers: install the one you use (`ai` 5 or later, `@mastra/core` 0.20 or later, `@langchain/core` 0.3.60 or later).
 
+The `precleared` command needs only Node: see [Command line](#command-line).
+
 ## Quick start
 
 ```ts
@@ -63,6 +65,55 @@ const health = await client.health(); // GET /api/v1/health: status, checked_at,
 ```
 
 A receipt proves what was asked and answered. The signature is Ed25519 over `request_hash.response_hash`; the receipt endpoint returns the public key alongside it, and `GET /api/v1/public-key` serves it too.
+
+## Command line
+
+The package includes a `precleared` command for the shell, scripts and the pre-send hooks of cold-email tools. It needs Node 18 or later and nothing else: zod is built into it.
+
+```bash
+npm install -g precleared
+precleared key --email you@yourcompany.com        # optional: a free key, saved in ~/.precleared/key
+precleared check jane@acme.co.uk sam@example.com
+precleared check --stdin --sender-country US < leads.txt
+```
+
+Each address gets one line: `send`, `hold` or `error`, with the verdict, the rule that decided it and the next step. `--json` prints a JSON object per address instead.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Every address may be emailed (`ok_to_email`) |
+| `2` | At least one address must be held: `consent_needed`, `blocked` or `unknown` |
+| `1` | Something could not be checked: a network problem, a bad key, the day's free checks used up, or a mistake in the command |
+
+A hold wins over an error, so a hook that stops on `2` never sends to a held address. Treat `1` as "don't send yet".
+
+- `--stdin` reads addresses from standard input, one per line. Lines without an `@` (phone numbers, blank lines, `#` notes) are skipped. `Name <address>` and the first column of a CSV work too. Each address is checked once.
+- `--sender-country` (`GB`, `US` or `AE`, default `GB`), `--address-source` (default `unknown`), `--pitch`, `--recipient-country` and `--default-country` are the fields `check()` takes. `PRECLEARED_SENDER_COUNTRY`, `PRECLEARED_ADDRESS_SOURCE` and `PRECLEARED_PITCH` set defaults.
+- `--log FILE` (or `PRECLEARED_LOG`) adds a JSON line per address: the decision, verdict, rule, next step, footer requirement and receipt id. Hooks usually throw the output away, so this is where to look later.
+- Definite answers are kept for 30 days in `~/.precleared/cache.json`, so a follow-up to the same person doesn't spend another check. The file holds hashes, not addresses, and `unknown` is never kept. `--cache-days N` changes the 30 days; `--no-cache` turns it off.
+- Checks run four at a time (`--concurrency`) and start at most once a second, inside the limit of 60 a minute. After a `rate_limited` answer the command waits and tries again. After a bad key, a 402 or the end of the day's free checks it stops and says what to do.
+- `--timeout SECONDS` (default 30) per check, `--quiet` for the exit code alone, and `--via NAME` to name the tool running the command, for example `cold-cli`.
+
+The key comes from `--key-file`, then `PRECLEARED_API_KEY`, then `~/.precleared/key`, and is never printed or logged. Without one the keyless allowance applies: 10 checks a day per network. `precleared key --email you@yourcompany.com` gets a free key (100 checks a day for the first 14 days, then 25 a day) and saves it in a file only you can read. Precleared receives the address to make the key (privacy: https://precleared.dev/privacy).
+
+### In cold-cli
+
+[cold-cli](https://github.com/andersmyrmel/cold-cli) runs a pre-send check before every delivery, follow-ups and inbox replies included. It passes the recipients on standard input and reads only the exit code: `0` sends, `2` skips the lead's remaining steps, anything else blocks that delivery. That is the contract `precleared check` follows.
+
+1. Install the command and get a key: `npm install -g precleared`, then `precleared key --email you@yourcompany.com`.
+2. Find the full paths with `which node` and `which precleared`. cold-cli runs the command directly, often from cron, so it may not find either by name.
+3. Add the check to `~/.cold-cli/config.yml`, with your two paths, your workspace and your sender country:
+
+```yaml
+pre_send_checks:
+  your-workspace:
+    command: ["/usr/local/bin/node", "/usr/local/bin/precleared", "check", "--stdin", "--sender-country", "GB", "--via", "cold-cli", "--log", "~/.precleared/cold-cli.log"]
+    timeout_seconds: 90
+```
+
+A check usually takes a few seconds but can take up to 25 when a company register is slow, so the timeout leaves room for one retry. The command expands the `~` itself. When a lead is held, `~/.precleared/cold-cli.log` says why.
+
+Any other tool that runs a command before sending and reads its exit code can use it the same way.
 
 ## Framework tools
 
@@ -198,7 +249,7 @@ new Precleared({
   retries: 1,                           // after a network error, a timeout or a 5xx; never after a 4xx
   retryDelayMs: 300,
   fetch: globalThis.fetch,              // any fetch-compatible function
-  userAgent: "precleared-js/0.1.1",     // Precleared's hosting refuses requests without one
+  userAgent: "precleared-js/<version>", // Precleared's hosting refuses requests without one
 });
 ```
 
@@ -219,8 +270,8 @@ npm install
 npm test               # vitest, with zod 4 installed
 npm run test:zod3      # the same suite with zod 3.25 swapped in (the "zod3" dev alias)
 npm run typecheck
-npm run build          # tsup: dist/ with ESM, CommonJS and types
-npm run smoke          # loads dist/ as ESM and CommonJS and runs real requests against a local server
+npm run build          # tsup: dist/ with ESM, CommonJS and types, then the command (dist/cli.js)
+npm run smoke          # loads dist/ as ESM and CommonJS, runs the command, all against a local server
 ```
 
 The tests stub `fetch` and never call the live API. The framework tests stub `ai`, `@mastra/core/tools` and `@langchain/core/tools` with `vi.mock`, so they run without the frameworks installed.

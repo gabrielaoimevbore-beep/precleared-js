@@ -18,5 +18,5 @@
     "declaration": true,
     "noEmit": true
   },
-  "include": ["src", "test", "tsup.config.ts", "vitest.config.ts", "vitest.zod3.config.ts"]
+  "include": ["src", "test", "tsup.config.ts", "tsup.cli.config.ts", "vitest.config.ts", "vitest.zod3.config.ts"]
 }
